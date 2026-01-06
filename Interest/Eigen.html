@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Eigenvalues & Eigenvectors Calculator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto;
+  background:#f4f6fb;
+  color:#111827;
+}
+.container{
+  max-width:1100px;
+  margin:auto;
+  padding:16px;
+}
+.card{
+  background:#fff;
+  border-radius:16px;
+  padding:18px;
+  box-shadow:0 12px 32px rgba(0,0,0,.08);
+  margin-bottom:16px;
+}
+h1{margin:0;color:#2563eb}
+p.muted{color:#6b7280;margin-top:6px}
+
+label{font-weight:600;font-size:14px}
+input,select{
+  width:100%;
+  padding:12px;
+  margin-top:6px;
+  margin-bottom:14px;
+  border-radius:10px;
+  border:1px solid #d1d5db;
+  font-size:15px;
+}
+button{
+  width:100%;
+  padding:14px;
+  border:none;
+  border-radius:12px;
+  background:#2563eb;
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
+}
+button.secondary{
+  background:#eef2ff;
+  color:#111;
+  margin-top:10px;
+}
+
+.matrix{
+  display:grid;
+  gap:10px;
+  margin-bottom:16px;
+}
+.matrix input{
+  text-align:center;
+  font-weight:600;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+@media(max-width:900px){
+  .grid{grid-template-columns:1fr}
+}
+
+.result{
+  background:#f9fafb;
+  border-radius:10px;
+  padding:14px;
+  font-family:monospace;
+}
+.step{
+  background:#f3f4f6;
+  border-radius:8px;
+  padding:10px;
+  margin-bottom:8px;
+}
+.badge{
+  display:inline-block;
+  background:#e0e7ff;
+  color:#1e3a8a;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  margin-bottom:6px;
+}
+.error{color:#dc2626;font-weight:600}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<div class="card">
+<h1>Eigenvalues & Eigenvectors Calculator</h1>
+<p class="muted">Exact eigenvalues for 2×2 • Numerical eigenvalues for 3×3</p>
+
+<label>Matrix Size</label>
+<select id="size" onchange="buildMatrix()">
+  <option value="2">2 × 2</option>
+  <option value="3">3 × 3</option>
+</select>
+
+<div id="matrix" class="matrix"></div>
+
+<button onclick="calculate()">Calculate</button>
+<button class="secondary" onclick="resetAll()">Reset</button>
+</div>
+
+<div class="grid">
+
+<div class="card">
+<h3>Result</h3>
+<div id="result" class="result"></div>
+</div>
+
+<div class="card">
+<h3>Step-by-Step</h3>
+<div id="steps"></div>
+</div>
+
+</div>
+</div>
+
+<script>
+buildMatrix();
+
+function buildMatrix(){
+  const n=+size.value;
+  const m=document.getElementById("matrix");
+  m.innerHTML="";
+  m.style.gridTemplateColumns=`repeat(${n},1fr)`;
+  for(let i=0;i<n*n;i++){
+    const inp=document.createElement("input");
+    inp.type="number";
+    inp.value=i%(n+1)===0?1:0;
+    m.appendChild(inp);
+  }
+}
+
+function getMatrix(){
+  const n=+size.value;
+  const vals=[...matrix.querySelectorAll("input")].map(i=>+i.value);
+  const A=[];
+  for(let i=0;i<n;i++) A.push(vals.slice(i*n,(i+1)*n));
+  return A;
+}
+
+function calculate(){
+  result.innerHTML="";
+  steps.innerHTML="";
+  try{
+    const A=getMatrix();
+    const n=A.length;
+
+    if(n===2) solve2x2(A);
+    else solve3x3(A);
+
+  }catch{
+    result.innerHTML='<span class="error">Invalid matrix</span>';
+  }
+}
+
+function solve2x2(A){
+  const a=A[0][0], b=A[0][1], c=A[1][0], d=A[1][1];
+  const tr=a+d, det=a*d-b*c;
+  const disc=tr*tr-4*det;
+
+  steps.innerHTML+=`<div class="step">Characteristic polynomial: λ² − (${tr})λ + ${det} = 0</div>`;
+
+  if(disc<0){
+    result.innerHTML="Complex eigenvalues (not shown)";
+    return;
+  }
+
+  const l1=(tr+Math.sqrt(disc))/2;
+  const l2=(tr-Math.sqrt(disc))/2;
+
+  result.innerHTML+=`<div class="badge">Eigenvalues</div><br>`;
+  result.innerHTML+=`λ₁ = ${l1.toFixed(6)}<br>λ₂ = ${l2.toFixed(6)}<br><br>`;
+
+  eigenVector2(A,l1,"v₁");
+  eigenVector2(A,l2,"v₂");
+}
+
+function eigenVector2(A,λ,label){
+  const a=A[0][0]-λ, b=A[0][1];
+  const x=1;
+  const y=b!==0? -a/b : 1;
+  const norm=Math.hypot(x,y);
+  result.innerHTML+=`${label} = [${(x/norm).toFixed(4)}, ${(y/norm).toFixed(4)}]<br>`;
+}
+
+function solve3x3(A){
+  steps.innerHTML+=`<div class="step">Numerical eigenvalues using QR iteration</div>`;
+  let M=JSON.parse(JSON.stringify(A));
+  for(let k=0;k<50;k++){
+    const {Q,R}=qr(M);
+    M=mul(R,Q);
+  }
+  const eig=[M[0][0],M[1][1],M[2][2]];
+  result.innerHTML+=`<div class="badge">Eigenvalues (approx)</div><br>`;
+  eig.forEach((v,i)=>result.innerHTML+=`λ${i+1} ≈ ${v.toFixed(6)}<br>`);
+}
+
+function qr(A){
+  const m=A.length;
+  let Q=[[],[],[]], R=[[0,0,0],[0,0,0],[0,0,0]];
+  for(let j=0;j<m;j++){
+    let v=A.map(r=>r[j]);
+    for(let i=0;i<j;i++){
+      const dot=v.reduce((s,x,k)=>s+x*Q[k][i],0);
+      R[i][j]=dot;
+      v=v.map((x,k)=>x-dot*Q[k][i]);
+    }
+    const norm=Math.hypot(...v);
+    R[j][j]=norm;
+    v=v.map(x=>x/norm);
+    v.forEach((x,k)=>Q[k][j]=x);
+  }
+  return {Q,R};
+}
+
+function mul(A,B){
+  return A.map(r=>B[0].map((_,j)=>r.reduce((s,x,i)=>s+x*B[i][j],0)));
+}
+
+function resetAll(){
+  size.value=2;
+  buildMatrix();
+  result.innerHTML="";
+  steps.innerHTML="";
+}
+</script>
+
+</body>
+</html>
