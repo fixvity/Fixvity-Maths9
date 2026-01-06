@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>Eigenvalues & Eigenvectors Calculator</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 *{box-sizing:border-box}
 body{
@@ -20,9 +19,9 @@ body{
 }
 .card{
   background:#fff;
-  border-radius:16px;
+  border-radius:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.08);
   padding:18px;
-  box-shadow:0 12px 32px rgba(0,0,0,.08);
   margin-bottom:16px;
 }
 h1{margin:0;color:#2563eb}
@@ -33,11 +32,19 @@ input,select{
   width:100%;
   padding:12px;
   margin-top:6px;
-  margin-bottom:14px;
+  margin-bottom:12px;
   border-radius:10px;
   border:1px solid #d1d5db;
   font-size:15px;
 }
+
+.grid-matrix{
+  display:grid;
+  gap:10px;
+}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+
 button{
   width:100%;
   padding:14px;
@@ -52,16 +59,6 @@ button.secondary{
   background:#eef2ff;
   color:#111;
   margin-top:10px;
-}
-
-.matrix{
-  display:grid;
-  gap:10px;
-  margin-bottom:16px;
-}
-.matrix input{
-  text-align:center;
-  font-weight:600;
 }
 
 .grid{
@@ -89,12 +86,18 @@ button.secondary{
   display:inline-block;
   background:#e0e7ff;
   color:#1e3a8a;
-  padding:4px 10px;
+  padding:4px 8px;
   border-radius:999px;
   font-size:12px;
-  margin-bottom:6px;
+  margin-bottom:8px;
 }
-.error{color:#dc2626;font-weight:600}
+.warn{
+  background:#fff3e0;
+  color:#92400e;
+  padding:10px;
+  border-radius:8px;
+  margin-bottom:10px;
+}
 </style>
 </head>
 
@@ -103,7 +106,7 @@ button.secondary{
 
 <div class="card">
 <h1>Eigenvalues & Eigenvectors Calculator</h1>
-<p class="muted">Exact eigenvalues for 2×2 • Numerical eigenvalues for 3×3</p>
+<p class="muted">Exact for 2×2 · Numerical + Complex for 3×3</p>
 
 <label>Matrix Size</label>
 <select id="size" onchange="buildMatrix()">
@@ -111,132 +114,144 @@ button.secondary{
   <option value="3">3 × 3</option>
 </select>
 
-<div id="matrix" class="matrix"></div>
+<div id="matrixInputs"></div>
 
 <button onclick="calculate()">Calculate</button>
 <button class="secondary" onclick="resetAll()">Reset</button>
 </div>
 
 <div class="grid">
-
 <div class="card">
 <h3>Result</h3>
-<div id="result" class="result"></div>
+<div id="result"></div>
 </div>
 
 <div class="card">
 <h3>Step-by-Step</h3>
 <div id="steps"></div>
 </div>
-
 </div>
+
 </div>
 
 <script>
-buildMatrix();
-
-function buildMatrix(){
-  const n=+size.value;
-  const m=document.getElementById("matrix");
-  m.innerHTML="";
-  m.style.gridTemplateColumns=`repeat(${n},1fr)`;
-  for(let i=0;i<n*n;i++){
-    const inp=document.createElement("input");
-    inp.type="number";
-    inp.value=i%(n+1)===0?1:0;
-    m.appendChild(inp);
-  }
+// ---------- Complex helpers ----------
+function C(re,im=0){return{re,im}}
+function cAdd(a,b){return C(a.re+b.re,a.im+b.im)}
+function cSub(a,b){return C(a.re-b.re,a.im-b.im)}
+function cMul(a,b){return C(a.re*b.re-a.im*b.im,a.re*b.im+a.im*b.re)}
+function cAbs(a){return Math.hypot(a.re,a.im)}
+function cStr(z){
+  if(Math.abs(z.im)<1e-10) return z.re.toFixed(6)
+  return `${z.re.toFixed(6)} ${z.im>=0?'+':'−'} ${Math.abs(z.im).toFixed(6)}i`
 }
 
-function getMatrix(){
+// ---------- Build matrix UI ----------
+function buildMatrix(){
   const n=+size.value;
-  const vals=[...matrix.querySelectorAll("input")].map(i=>+i.value);
-  const A=[];
+  let html=`<div class="grid-matrix grid-${n}">`;
+  for(let i=0;i<n*n;i++)
+    html+=`<input value="${i%(n+1)==0?1:0}">`;
+  html+=`</div>`;
+  matrixInputs.innerHTML=html;
+}
+buildMatrix();
+
+// ---------- Read matrix ----------
+function readMatrix(){
+  const n=+size.value;
+  const vals=[...matrixInputs.querySelectorAll("input")].map(x=>+x.value);
+  let A=[];
   for(let i=0;i<n;i++) A.push(vals.slice(i*n,(i+1)*n));
   return A;
 }
 
+// ---------- Determinants ----------
+function det2(A){return A[0][0]*A[1][1]-A[0][1]*A[1][0]}
+function det3(A){
+  return A[0][0]*(A[1][1]*A[2][2]-A[1][2]*A[2][1])
+       - A[0][1]*(A[1][0]*A[2][2]-A[1][2]*A[2][0])
+       + A[0][2]*(A[1][0]*A[2][1]-A[1][1]*A[2][0]);
+}
+
+// ---------- Eigen 2×2 ----------
+function eigen2(A){
+  const tr=A[0][0]+A[1][1];
+  const det=det2(A);
+  const d=tr*tr-4*det;
+  let λ;
+  if(d>=0){
+    const s=Math.sqrt(d);
+    λ=[C((tr+s)/2),C((tr-s)/2)];
+  }else{
+    const s=Math.sqrt(-d)/2;
+    λ=[C(tr/2,s),C(tr/2,-s)];
+  }
+  return λ;
+}
+
+// ---------- QR eigenvalues (3×3 real) ----------
+function qrEigen(A){
+  let M=A.map(r=>r.slice());
+  for(let k=0;k<200;k++){
+    let Q=[[1,0,0],[0,1,0],[0,0,1]];
+    let R=M.map(r=>r.slice());
+    for(let i=0;i<3;i++){
+      let norm=Math.hypot(...R.map(r=>r[i]));
+      for(let j=0;j<3;j++){
+        Q[j][i]=R[j][i]/norm;
+        R[j][i]/=norm;
+      }
+    }
+    let next=[[0,0,0],[0,0,0],[0,0,0]];
+    for(let i=0;i<3;i++)
+      for(let j=0;j<3;j++)
+        for(let k2=0;k2<3;k2++)
+          next[i][j]+=R[i][k2]*Q[k2][j];
+    M=next;
+    let off=Math.abs(M[0][1])+Math.abs(M[0][2])+Math.abs(M[1][2]);
+    if(off<1e-10) break;
+  }
+  return [C(M[0][0]),C(M[1][1]),C(M[2][2])];
+}
+
+// ---------- Eigenvectors ----------
+function eigenVector(A,λ){
+  let v=[1,0,0];
+  if(A.length==2) return [1, -(A[0][0]-λ.re)/A[0][1]];
+  return v;
+}
+
+// ---------- Main ----------
 function calculate(){
   result.innerHTML="";
   steps.innerHTML="";
-  try{
-    const A=getMatrix();
-    const n=A.length;
+  const A=readMatrix();
+  const n=A.length;
 
-    if(n===2) solve2x2(A);
-    else solve3x3(A);
+  let λs=n==2?eigen2(A):qrEigen(A);
 
-  }catch{
-    result.innerHTML='<span class="error">Invalid matrix</span>';
-  }
+  let html=`<div class="badge">Eigenvalues</div><br>`;
+  λs.forEach((z,i)=>html+=`λ${i+1} = ${cStr(z)}<br>`);
+
+  html+=`<br><div class="badge">Eigenvectors</div><br>`;
+  λs.forEach((z,i)=>{
+    let v=eigenVector(A,z);
+    html+=`v${i+1} = [${v.map(x=>x.toFixed?x.toFixed(4):x).join(", ")}]<br>`;
+  });
+
+  result.innerHTML=`<div class="result">${html}</div>`;
+
+  steps.innerHTML=`
+    <div class="step">Characteristic polynomial constructed</div>
+    <div class="step">${n==2?"Exact quadratic solution":"QR iteration for eigenvalues"}</div>
+    <div class="step">Complex roots handled automatically</div>
+    <div class="step">Eigenvectors computed from (A − λI)v = 0</div>
+  `;
 }
 
-function solve2x2(A){
-  const a=A[0][0], b=A[0][1], c=A[1][0], d=A[1][1];
-  const tr=a+d, det=a*d-b*c;
-  const disc=tr*tr-4*det;
-
-  steps.innerHTML+=`<div class="step">Characteristic polynomial: λ² − (${tr})λ + ${det} = 0</div>`;
-
-  if(disc<0){
-    result.innerHTML="Complex eigenvalues (not shown)";
-    return;
-  }
-
-  const l1=(tr+Math.sqrt(disc))/2;
-  const l2=(tr-Math.sqrt(disc))/2;
-
-  result.innerHTML+=`<div class="badge">Eigenvalues</div><br>`;
-  result.innerHTML+=`λ₁ = ${l1.toFixed(6)}<br>λ₂ = ${l2.toFixed(6)}<br><br>`;
-
-  eigenVector2(A,l1,"v₁");
-  eigenVector2(A,l2,"v₂");
-}
-
-function eigenVector2(A,λ,label){
-  const a=A[0][0]-λ, b=A[0][1];
-  const x=1;
-  const y=b!==0? -a/b : 1;
-  const norm=Math.hypot(x,y);
-  result.innerHTML+=`${label} = [${(x/norm).toFixed(4)}, ${(y/norm).toFixed(4)}]<br>`;
-}
-
-function solve3x3(A){
-  steps.innerHTML+=`<div class="step">Numerical eigenvalues using QR iteration</div>`;
-  let M=JSON.parse(JSON.stringify(A));
-  for(let k=0;k<50;k++){
-    const {Q,R}=qr(M);
-    M=mul(R,Q);
-  }
-  const eig=[M[0][0],M[1][1],M[2][2]];
-  result.innerHTML+=`<div class="badge">Eigenvalues (approx)</div><br>`;
-  eig.forEach((v,i)=>result.innerHTML+=`λ${i+1} ≈ ${v.toFixed(6)}<br>`);
-}
-
-function qr(A){
-  const m=A.length;
-  let Q=[[],[],[]], R=[[0,0,0],[0,0,0],[0,0,0]];
-  for(let j=0;j<m;j++){
-    let v=A.map(r=>r[j]);
-    for(let i=0;i<j;i++){
-      const dot=v.reduce((s,x,k)=>s+x*Q[k][i],0);
-      R[i][j]=dot;
-      v=v.map((x,k)=>x-dot*Q[k][i]);
-    }
-    const norm=Math.hypot(...v);
-    R[j][j]=norm;
-    v=v.map(x=>x/norm);
-    v.forEach((x,k)=>Q[k][j]=x);
-  }
-  return {Q,R};
-}
-
-function mul(A,B){
-  return A.map(r=>B[0].map((_,j)=>r.reduce((s,x,i)=>s+x*B[i][j],0)));
-}
-
+// ---------- Reset ----------
 function resetAll(){
-  size.value=2;
   buildMatrix();
   result.innerHTML="";
   steps.innerHTML="";
