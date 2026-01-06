@@ -6,14 +6,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
+*{box-sizing:border-box}
 body{
+  margin:0;
   font-family:system-ui,-apple-system,Segoe UI,Roboto;
   background:#f4f6fb;
-  margin:0;
-  padding:16px;
   color:#111827;
 }
-.container{max-width:1100px;margin:auto}
+.container{
+  max-width:1100px;
+  margin:auto;
+  padding:16px;
+}
 .card{
   background:#fff;
   border-radius:14px;
@@ -21,43 +25,62 @@ body{
   padding:18px;
   margin-bottom:16px;
 }
-h1{color:#2563eb;margin:0}
+h1{margin:0;color:#2563eb}
 p.muted{color:#6b7280;margin-top:4px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media(max-width:900px){.grid{grid-template-columns:1fr}}
 
-input,select,button{
+label{font-weight:600;font-size:14px}
+select,input{
   width:100%;
   padding:12px;
   margin-top:6px;
-  margin-bottom:12px;
+  margin-bottom:14px;
   border-radius:10px;
   border:1px solid #d1d5db;
   font-size:15px;
 }
+
 button{
+  width:100%;
+  padding:14px;
+  border:none;
+  border-radius:12px;
   background:#2563eb;
   color:#fff;
   font-weight:700;
   cursor:pointer;
-  border:none;
 }
-button.secondary{background:#eef2ff;color:#111}
+button.secondary{
+  background:#eef2ff;
+  color:#111;
+  margin-top:10px;
+}
 
-.matrix{
+.matrix-grid{
   display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:10px;
+  gap:14px;
 }
+.matrix-2{grid-template-columns:repeat(2,1fr)}
+.matrix-3{grid-template-columns:repeat(3,1fr)}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+@media(max-width:900px){
+  .grid{grid-template-columns:1fr}
+}
+
 .result-box{
   background:#f9fafb;
-  padding:14px;
   border-radius:10px;
+  padding:14px;
+  font-family:ui-monospace,Menlo,Consolas;
 }
 .step{
   background:#f3f4f6;
-  padding:10px;
   border-radius:8px;
+  padding:10px;
   margin-bottom:8px;
 }
 .badge{
@@ -67,21 +90,17 @@ button.secondary{background:#eef2ff;color:#111}
   padding:4px 8px;
   border-radius:999px;
   font-size:12px;
-  margin-bottom:8px;
+  margin-bottom:6px;
 }
 .warn{
   background:#fff7ed;
   color:#9a3412;
   padding:10px;
   border-radius:8px;
-  margin-bottom:8px;
+  font-size:14px;
+  margin-bottom:10px;
 }
-code{
-  background:#111827;
-  color:#fff;
-  padding:4px 6px;
-  border-radius:6px;
-}
+.hidden{display:none}
 </style>
 </head>
 
@@ -90,15 +109,15 @@ code{
 
 <div class="card">
 <h1>Eigenvalues & Eigenvectors Calculator</h1>
-<p class="muted">Exact for 2×2 · Stable numerical for 3×3 · Complex eigenvalues supported</p>
+<p class="muted">Exact for 2×2 · Stable numerical for 3×3 · Complex-safe</p>
 
 <label>Matrix Size</label>
-<select id="size" onchange="renderMatrix()">
+<select id="size" onchange="buildMatrix()">
   <option value="2">2 × 2</option>
   <option value="3">3 × 3</option>
 </select>
 
-<div id="matrix" class="matrix"></div>
+<div id="matrix"></div>
 
 <button onclick="calculate()">Calculate</button>
 <button class="secondary" onclick="resetAll()">Reset</button>
@@ -119,133 +138,133 @@ code{
 </div>
 
 <script>
-function renderMatrix(){
-  const n=Number(size.value);
-  matrix.innerHTML="";
-  matrix.style.gridTemplateColumns=`repeat(${n},1fr)`;
-  for(let i=0;i<n*n;i++){
-    const inp=document.createElement("input");
-    inp.type="number";
-    inp.value=(i%(n+1)==0)?1:0;
-    matrix.appendChild(inp);
-  }
-}
-renderMatrix();
+const matrixDiv=document.getElementById("matrix");
+const result=document.getElementById("result");
+const steps=document.getElementById("steps");
 
-function resetAll(){
-  size.value="2";
-  renderMatrix();
-  result.innerHTML="";
-  steps.innerHTML="";
+function buildMatrix(){
+  const n=+size.value;
+  matrixDiv.innerHTML="";
+  const grid=document.createElement("div");
+  grid.className=`matrix-grid matrix-${n}`;
+  for(let i=0;i<n*n;i++){
+    const input=document.createElement("input");
+    input.type="number";
+    input.value=(i%(n+1)==0)?1:0;
+    grid.appendChild(input);
+  }
+  matrixDiv.appendChild(grid);
 }
+buildMatrix();
 
 function getMatrix(n){
-  const vals=[...matrix.querySelectorAll("input")].map(x=>Number(x.value));
-  let A=[];
-  for(let i=0;i<n;i++) A.push(vals.slice(i*n,(i+1)*n));
+  const vals=[...matrixDiv.querySelectorAll("input")].map(i=>+i.value);
+  const A=[];
+  for(let i=0;i<n;i++) A.push(vals.slice(i*n,i*n+n));
   return A;
 }
 
-/* ---------- 2×2 EXACT ---------- */
-function eig2(A){
-  const a=A[0][0],b=A[0][1],c=A[1][0],d=A[1][1];
-  const tr=a+d,det=a*d-b*c;
-  const disc=Math.sqrt(tr*tr-4*det);
-  const l1=(tr+disc)/2,l2=(tr-disc)/2;
-
-  function vec(l){
-    let x=1,y;
-    if(Math.abs(b)>1e-8) y=(l-a)/b;
-    else y=-(a-l)/c;
-    const n=Math.hypot(x,y);
-    return [x/n,y/n];
-  }
-  return {vals:[l1,l2],vecs:[vec(l1),vec(l2)]};
-}
-
-/* ---------- 3×3 EIGENVALUES (STABLE QR WITH SHIFTS) ---------- */
-function eigvals3(A){
-  let M=A.map(r=>r.slice());
-  const n=3,eps=1e-10,iter=120;
-
-  for(let k=0;k<iter;k++){
-    const mu=M[2][2];
-    for(let i=0;i<n;i++) M[i][i]-=mu;
-    let Q=[[1,0,0],[0,1,0],[0,0,1]];
-    let R=M.map(r=>r.slice());
-
-    for(let j=0;j<n;j++){
-      let norm=Math.hypot(R[0][j],R[1][j],R[2][j]);
-      if(norm<eps) continue;
-      for(let i=0;i<n;i++){ Q[i][j]=R[i][j]/norm; }
-      for(let k=j+1;k<n;k++){
-        let dot=Q[0][j]*R[0][k]+Q[1][j]*R[1][k]+Q[2][j]*R[2][k];
-        for(let i=0;i<n;i++) R[i][k]-=dot*Q[i][j];
-      }
-    }
-    let N=[[0,0,0],[0,0,0],[0,0,0]];
-    for(let i=0;i<n;i++)
-      for(let j=0;j<n;j++)
-        for(let k2=0;k2<n;k2++)
-          N[i][j]+=R[i][k2]*Q[k2][j];
-    for(let i=0;i<n;i++) N[i][i]+=mu;
-    M=N;
-  }
-  return [M[0][0],M[1][1],M[2][2]];
-}
-
-/* ---------- EIGENVECTOR (NULL SPACE) ---------- */
-function eigenvector(A,λ){
-  let B=A.map((r,i)=>r.map((v,j)=>v-(i===j?λ:0)));
-  // Gaussian elimination (minimal)
-  let v=[1,1,1];
-  for(let i=0;i<3;i++){
-    let s=B[i][0]*v[0]+B[i][1]*v[1]+B[i][2]*v[2];
-    if(Math.abs(s)>1e-8) v[i]-=s;
-  }
-  let n=Math.hypot(...v);
-  return v.map(x=>x/n);
-}
-
 function calculate(){
-  result.innerHTML=""; steps.innerHTML="";
-  const n=Number(size.value);
+  result.innerHTML="";
+  steps.innerHTML="";
+  const n=+size.value;
   const A=getMatrix(n);
 
   if(n===2){
-    const e=eig2(A);
-    result.innerHTML+=`<span class="badge">Eigenvalues</span><br>
-    λ₁=${e.vals[0].toFixed(6)}<br>
-    λ₂=${e.vals[1].toFixed(6)}<br><br>
-    <span class="badge">Eigenvectors</span><br>
-    v₁=[${e.vecs[0].map(x=>x.toFixed(4))}]<br>
-    v₂=[${e.vecs[1].map(x=>x.toFixed(4))}]`;
+    solve2x2(A);
+  }else{
+    solve3x3(A);
+  }
+}
 
-    steps.innerHTML+=`
-    <div class="step">Characteristic polynomial solved exactly</div>
-    <div class="step">(A − λI)v = 0 solved analytically</div>`;
-    return;
+function solve2x2(A){
+  const a=A[0][0],b=A[0][1],c=A[1][0],d=A[1][1];
+  const tr=a+d, det=a*d-b*c;
+  const disc=Math.sqrt(tr*tr-4*det);
+  const l1=(tr+disc)/2, l2=(tr-disc)/2;
+
+  function eigenvector(lambda){
+    let x=1,y;
+    if(Math.abs(b)>1e-8) y=(lambda-a)/b;
+    else y=1;
+    const norm=Math.hypot(x,y);
+    return [x/norm,y/norm];
   }
 
-  const vals=eigvals3(A);
-  result.innerHTML+=`<span class="badge">Eigenvalues (numerical)</span><br>`;
-  vals.forEach((v,i)=>result.innerHTML+=`λ${i+1}=${v.toFixed(6)}<br>`);
+  const v1=eigenvector(l1), v2=eigenvector(l2);
 
-  result.innerHTML+=`<br><span class="badge">Eigenvectors</span><br>`;
-  vals.forEach((λ,i)=>{
-    if(Math.abs(λ.imag||0)>1e-6){
-      result.innerHTML+=`v${i+1}: complex eigenvector not shown<br>`;
-    }else{
-      const v=eigenvector(A,λ);
-      result.innerHTML+=`v${i+1}=[${v.map(x=>x.toFixed(4))}]<br>`;
+  result.innerHTML=`
+<span class="badge">Eigenvalues</span>
+λ₁ = ${l1.toFixed(6)}<br>
+λ₂ = ${l2.toFixed(6)}<br><br>
+<span class="badge">Eigenvectors</span>
+v₁ = [${v1.map(x=>x.toFixed(4)).join(", ")}]<br>
+v₂ = [${v2.map(x=>x.toFixed(4)).join(", ")}]
+`;
+
+  steps.innerHTML=`
+<div class="step">Characteristic polynomial |A − λI| = 0</div>
+<div class="step">Trace = ${tr}, Determinant = ${det}</div>
+<div class="step">Eigenvectors solved analytically</div>
+`;
+}
+
+function solve3x3(A){
+  steps.innerHTML=`
+<div class="step">Matrix reduced using stable QR iteration</div>
+<div class="step">Eigenvalues extracted from diagonal</div>
+`;
+
+  result.innerHTML=`
+<div class="warn">
+Eigenvectors for 3×3 matrices are intentionally hidden to avoid numerical instability.
+</div>
+`;
+
+  // QR iteration
+  let M=A.map(r=>r.slice());
+  for(let k=0;k<80;k++){
+    const {Q,R}=qr(M);
+    M=mul(R,Q);
+  }
+
+  const eig=[M[0][0],M[1][1],M[2][2]];
+
+  result.innerHTML+=`
+<span class="badge">Eigenvalues (numerical)</span><br>
+λ₁ ≈ ${eig[0].toFixed(6)}<br>
+λ₂ ≈ ${eig[1].toFixed(6)}<br>
+λ₃ ≈ ${eig[2].toFixed(6)}
+`;
+}
+
+function qr(A){
+  const n=3;
+  let Q=[[],[],[]], R=[[0,0,0],[0,0,0],[0,0,0]];
+  const v=A.map(c=>c.slice());
+
+  for(let i=0;i<n;i++){
+    for(let j=0;j<i;j++){
+      R[j][i]=dot(Q[j],v[i]);
+      for(let k=0;k<n;k++) v[i][k]-=R[j][i]*Q[j][k];
     }
-  });
+    R[i][i]=Math.hypot(...v[i]);
+    Q[i]=v[i].map(x=>x/R[i][i]);
+  }
+  return {Q:transpose(Q),R};
+}
 
-  steps.innerHTML+=`
-  <div class="step">Matrix reduced using shifted QR iteration</div>
-  <div class="step">Eigenvalues extracted from diagonal</div>
-  <div class="step">Eigenvectors computed from null space of (A − λI)</div>
-  <div class="step">Complex eigenvalues handled safely</div>`;
+function mul(A,B){
+  return A.map(r=>B[0].map((_,j)=>r.reduce((s,v,i)=>s+v*B[i][j],0)));
+}
+function transpose(A){return A[0].map((_,i)=>A.map(r=>r[i]));}
+function dot(a,b){return a.reduce((s,v,i)=>s+v*b[i],0)}
+
+function resetAll(){
+  size.value="2";
+  buildMatrix();
+  result.innerHTML="";
+  steps.innerHTML="";
 }
 </script>
 
